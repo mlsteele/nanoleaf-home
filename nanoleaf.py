@@ -6,14 +6,15 @@ import datetime
 from dateutil.tz import tzutc
 from time import sleep
 from suntime import Sun, SunTimeException
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 NANOLEAF_IP = "192.168.0.198"
-nl = Nanoleaf(NANOLEAF_IP)
-
 SUNRISE_OFFSET_M = 0  # offset from sunrise in minutes.
 # How long past the deadline before an unexecuted event expires in minutes.
 LAG_M = 10
+
+nl = Nanoleaf(NANOLEAF_IP)
+ran_log = defaultdict(lambda: False)  # Register of events already ran.
 
 
 def display_sunrise():
@@ -60,6 +61,18 @@ def mkev(mk_fn):
     return ev
 
 
+def already_ran(ev, insert=False):
+    res = ran_log[(ev.t, ev.name)]
+    if insert:
+        ran_log[(ev.t, ev.name)] = True
+
+    # cleanup
+    for x in ran_log:
+        if x[0] - datetime.datetime.now().astimezone() < -datetime.timedelta(days=2):
+            del ran_log[x]
+    return res
+
+
 def get_schedule():
     """Get a list of upcoming Events."""
     schedule = []
@@ -73,45 +86,54 @@ def get_schedule():
     # At 10pm turn on the nightlight
     schedule.append(mkev(mkev_nightlight))
 
-    schedule.append(mkev(lambda day: Event(
-        datetime.datetime.combine(
-            day,
-            datetime.time(hour=8, minute=39)).astimezone(), "probe", lambda: nl.set_color((100, 100, 0)))))
+    # schedule.append(mkev(lambda day: Event(
+    #     datetime.datetime.combine(
+    #         day,
+    #         datetime.time(hour=8, minute=56)).astimezone(),
+    #     "probe-1", lambda: nl.set_color((0, 0, 100)))))
 
+    # schedule.append(mkev(lambda day: Event(
+    #     datetime.datetime.combine(
+    #         day,
+    #         datetime.time(hour=8, minute=57)).astimezone(),
+    #     "probe-2", lambda: nl.set_color((0, 100, 0)))))
+
+    schedule = filter(lambda ev: not already_ran(ev), schedule)
     return sorted(schedule, key=lambda x: x[0])
 
 
 has_expired(datetime.datetime.combine(datetime.date.today(),
             datetime.time(hour=8, minute=39)).astimezone())
 
+
+def loop_one():
+    print("---")
+    schedule = get_schedule()
+    SLEEP_MIN = datetime.timedelta(seconds=1)
+    SLEEP_MAX = datetime.timedelta(minutes=20)
+    sleep_for = SLEEP_MAX
+    if len(schedule) > 0:
+        print("schedule")
+        for t, name, _ in schedule:
+            print(t, name)
+        ev = schedule[0]
+        until = ev.t - datetime.datetime.now().astimezone()
+        print(until, "until", ev.name)
+        if until <= datetime.timedelta(minutes=0):
+            print("running", ev.name)
+            ev.fn()
+            already_ran(ev, insert=True)
+            return
+        else:
+            sleep_for = until
+    sleep_for = max(min(sleep_for, SLEEP_MAX), SLEEP_MIN)
+    print("sleeping", sleep_for)
+    sleep(sleep_for.total_seconds())
+
+
 if __name__ == "__main__":
-    t = datetime.datetime.combine(
-        datetime.date.today(),
-        datetime.time(hour=8, minute=39)).astimezone()
-    print(t, has_expired(t))
-
     while True:
-        print("---")
-        schedule = get_schedule()
-        SLEEP_MIN = datetime.timedelta(seconds=1)
-        SLEEP_MAX = datetime.timedelta(minutes=20)
-        sleep_for = SLEEP_MAX
-        if len(schedule) > 0:
-            print("schedule")
-            for t, name, _ in schedule:
-                print(t, name)
-            ev = schedule[0]
-            until = ev.t - datetime.datetime.now().astimezone()
-            print(until, "until", ev.name)
-            if until <= datetime.timedelta(minutes=0):
-                print("running", ev.name)
-                ev.fn()
-            else:
-                sleep_for = until
-        sleep_for = max(min(sleep_for, SLEEP_MAX), SLEEP_MIN)
-        print("sleeping", sleep_for)
-        sleep(sleep_for.total_seconds())
-
+        loop_one()
 
 """
 {'name': 'Light Panels 50:A2:58',
