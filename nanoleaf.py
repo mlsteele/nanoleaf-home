@@ -6,49 +6,90 @@ import datetime
 from dateutil.tz import tzutc
 from time import sleep
 from suntime import Sun, SunTimeException
+from collections import namedtuple
+
 NANOLEAF_IP = "192.168.0.198"
 nl = Nanoleaf(NANOLEAF_IP)
 
-SUNRISE_OFFSET_M = 0  # offset from sunrise in minutes
+SUNRISE_OFFSET_M = 0  # offset from sunrise in minutes.
+# How long past the deadline before an unexecuted event expires in minutes.
+LAG_M = 10
 
 
-def sunrise():
+def display_sunrise():
     nl.set_effect("Coral Sunrise")
     nl.set_brightness(100)  # 0 - 100
 
 
+Event = namedtuple("Event", ['t', 'name', 'fn'])
+
+
+def has_expired(t: datetime):
+    return (t - datetime.datetime.now().astimezone()) < -datetime.timedelta(minutes=LAG_M)
+
+
+def date_tomorrow():
+    return datetime.date.today() + datetime.timedelta(days=1)
+
+
+def mkev_sunrise(day: datetime.date):
+    """At sunrise turn on coral sunrise"""
+    sun = Sun(42.317794, -72.631973)
+    return Event(sun.get_sunrise_time(date=day)
+                 + datetime.timedelta(minutes=SUNRISE_OFFSET_M),
+                 "morning-sunrise", display_sunrise)
+
+
+def mkev_morning_off(day: datetime.date):
+    return Event(datetime.datetime.combine(
+        day,
+        datetime.time(hour=10, minute=15)).astimezone(),
+        "morning-off", lambda: nl.power_off())
+
+
+def mkev_nightlight(day: datetime.date):
+    return Event(datetime.datetime.combine(
+        day, datetime.time(hour=20)).astimezone(),
+        "nightlight-on", lambda: nl.set_color((0.13 * 255, 0, 0)))
+
+
+def mkev(mk_fn):
+    ev = mk_fn(datetime.date.today())
+    if has_expired(ev.t):
+        ev = mk_fn(date_tomorrow())
+    return ev
+
+
 def get_schedule():
-    """Return a list of events for today.
-    [(datetime, name, fn), ...]
-    """
+    """Get a list of upcoming Events."""
     schedule = []
     sun = Sun(42.317794, -72.631973)
     # At sunrise turn on coral sunrise
-    schedule.append((sun.get_sunrise_time()
-                     + datetime.timedelta(minutes=SUNRISE_OFFSET_M),
-                     "morning-sunrise", sunrise))
+    schedule.append(mkev(mkev_sunrise))
 
     # At 10:15am turn off
-    # schedule.append((datetime.datetime.combine(datetime.date.today(), datetime.time(hour=10, minute=15, tzinfo=tzutc())),
-    schedule.append((datetime.datetime.combine(
-        datetime.date.today(), datetime.time(hour=10, minute=15)).astimezone(),
-        "morning-off", lambda: nl.power_off()))
+    schedule.append(mkev(mkev_morning_off))
 
     # At 10pm turn on the nightlight
-    schedule.append((datetime.datetime.combine(
-        datetime.date.today(), datetime.time(hour=20)).astimezone(),
-        "nightlight-on", lambda: nl.set_color((0.13 * 255, 0, 0))))
+    schedule.append(mkev(mkev_nightlight))
 
-    # Fake testing thing
-    schedule.append((datetime.datetime.combine(
-        datetime.date.today(), datetime.time(hour=21, minute=14)).astimezone(),
-        "nightlight-on", lambda: nl.set_color((0.13 * 255, 0, 0))))
+    schedule.append(mkev(lambda day: Event(
+        datetime.datetime.combine(
+            day,
+            datetime.time(hour=8, minute=39)).astimezone(), "probe", lambda: nl.set_color((100, 100, 0)))))
 
     return sorted(schedule, key=lambda x: x[0])
 
 
+has_expired(datetime.datetime.combine(datetime.date.today(),
+            datetime.time(hour=8, minute=39)).astimezone())
+
 if __name__ == "__main__":
-    # Warning: This crappy scheduler may miss events scheduled within 20 minutes past midnight.
+    t = datetime.datetime.combine(
+        datetime.date.today(),
+        datetime.time(hour=8, minute=39)).astimezone()
+    print(t, has_expired(t))
+
     while True:
         print("---")
         schedule = get_schedule()
@@ -59,14 +100,12 @@ if __name__ == "__main__":
             print("schedule")
             for t, name, _ in schedule:
                 print(t, name)
-            t, name, fn = schedule[0]
-            until = t - datetime.datetime.now().astimezone()
-            print(until, "until", name)
-            if until < datetime.timedelta(minutes=10):
-                pass
-            elif until <= datetime.timedelta(minutes=0):
-                print("running", name)
-                fn()
+            ev = schedule[0]
+            until = ev.t - datetime.datetime.now().astimezone()
+            print(until, "until", ev.name)
+            if until <= datetime.timedelta(minutes=0):
+                print("running", ev.name)
+                ev.fn()
             else:
                 sleep_for = until
         sleep_for = max(min(sleep_for, SLEEP_MAX), SLEEP_MIN)
