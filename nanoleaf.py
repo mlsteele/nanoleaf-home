@@ -3,7 +3,6 @@
 from nanoleafapi import Nanoleaf
 from nanoleafapi import RED, ORANGE, YELLOW, GREEN, LIGHT_BLUE, BLUE, PINK, PURPLE, WHITE
 import datetime
-from dateutil.tz import tzutc
 from time import sleep
 from suntime import Sun, SunTimeException
 from collections import namedtuple, defaultdict
