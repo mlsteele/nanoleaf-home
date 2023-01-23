@@ -88,14 +88,14 @@ def get_schedule():
     # schedule.append(mkev(lambda day: Event(
     #     datetime.datetime.combine(
     #         day,
-    #         datetime.time(hour=8, minute=56)).astimezone(),
-    #     "probe-1", lambda: nl.set_color((0, 0, 100)))))
+    #         datetime.time(hour=21, minute=44)).astimezone(),
+    #     "probe-1", lambda: nl.set_color((3, 0, 0)))))
 
     # schedule.append(mkev(lambda day: Event(
     #     datetime.datetime.combine(
     #         day,
-    #         datetime.time(hour=8, minute=57)).astimezone(),
-    #     "probe-2", lambda: nl.set_color((0, 100, 0)))))
+    #         datetime.time(hour=21, minute=45)).astimezone(),
+    #     "probe-2", lambda: nl.set_color((0, 0, 0)))))
 
     schedule = filter(lambda ev: not already_ran(ev), schedule)
     return sorted(schedule, key=lambda x: x[0])
@@ -126,7 +126,7 @@ def loop_one():
         else:
             sleep_for = until
     sleep_for = max(min(sleep_for, SLEEP_MAX), SLEEP_MIN)
-    print("sleeping", sleep_for)
+    print("sleeping", sleep_for, flush=True)
     sleep(sleep_for.total_seconds())
 
 
