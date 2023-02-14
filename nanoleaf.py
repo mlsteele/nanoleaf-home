@@ -9,6 +9,7 @@ from collections import namedtuple, defaultdict
 
 NANOLEAF_IP = "192.168.0.198"
 SUNRISE_OFFSET_M = 0  # offset from sunrise in minutes.
+SUNRISE_FADE_DURATION_S = 60*10
 # How long past the deadline before an unexecuted event expires in minutes.
 LAG_M = 10
 
@@ -17,8 +18,11 @@ ran_log = defaultdict(lambda: False)  # Register of events already ran.
 
 
 def display_sunrise():
+    """Reaches full brightness"""
+    nl.set_brightness(0, 0)
     nl.set_effect("Coral Sunrise")
-    nl.set_brightness(100)  # 0 - 100
+    nl.set_brightness(0, 0)
+    nl.set_brightness(100, duration=SUNRISE_FADE_DURATION_S)
 
 
 Event = namedtuple("Event", ['t', 'name', 'fn'])
@@ -36,7 +40,8 @@ def mkev_sunrise(day: datetime.date):
     """At sunrise turn on coral sunrise"""
     sun = Sun(42.317794, -72.631973)
     return Event(sun.get_sunrise_time(date=day)
-                 + datetime.timedelta(minutes=SUNRISE_OFFSET_M),
+                 + datetime.timedelta(minutes=SUNRISE_OFFSET_M)
+                 + datetime.timedelta(seconds=-SUNRISE_FADE_DURATION_S),
                  "morning-sunrise", display_sunrise)
 
 
@@ -134,6 +139,7 @@ if __name__ == "__main__":
     while True:
         loop_one()
 
+# Panel info
 """
 {'name': 'Light Panels 50:A2:58',
  'serialNo': 'S17072A2725',
@@ -192,4 +198,46 @@ if __name__ == "__main__":
   'hue': {'value': 0, 'max': 360, 'min': 0},
   'on': {'value': True},
   'sat': {'value': 0, 'max': 100, 'min': 0}}}
+"""
+
+# Coral sunrise effect
+"""
+{'version': '2.0',
+ 'animName': 'Coral Sunrise',
+ 'animType': 'plugin',
+ 'colorType': 'HSB',
+ 'palette': [{'hue': 5,
+   'saturation': 61,
+   'brightness': 100,
+   'probability': 0.0},
+  {'hue': 340, 'saturation': 31, 'brightness': 87, 'probability': 0.0},
+  {'hue': 38, 'saturation': 76, 'brightness': 100, 'probability': 0.0}],
+ 'pluginType': 'color',
+ 'pluginUuid': '6970681a-20b5-4c5e-8813-bdaebc4ee4fa',
+ 'pluginOptions': [{'name': 'linDirection', 'value': 'right'},
+  {'name': 'loop', 'value': True},
+  {'name': 'nColorsPerFrame', 'value': 2},
+  {'name': 'transTime', 'value': 24}],
+ 'hasOverlay': False}
+"""
+
+# Wakeful sunrise effect
+"""
+{'version': '2.0',
+ 'animName': 'Coral Sunrise',
+ 'animType': 'plugin',
+ 'colorType': 'HSB',
+ 'palette': [{'hue': 5,
+   'saturation': 61,
+   'brightness': 100,
+   'probability': 0.0},
+  {'hue': 340, 'saturation': 31, 'brightness': 87, 'probability': 0.0},
+  {'hue': 38, 'saturation': 76, 'brightness': 100, 'probability': 0.0}],
+ 'pluginType': 'color',
+ 'pluginUuid': '6970681a-20b5-4c5e-8813-bdaebc4ee4fa',
+ 'pluginOptions': [{'name': 'linDirection', 'value': 'right'},
+  {'name': 'loop', 'value': True},
+  {'name': 'nColorsPerFrame', 'value': 2},
+  {'name': 'transTime', 'value': 24}],
+ 'hasOverlay': False}
 """
