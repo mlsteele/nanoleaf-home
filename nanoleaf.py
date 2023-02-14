@@ -7,24 +7,22 @@ from time import sleep
 from suntime import Sun, SunTimeException
 from collections import namedtuple, defaultdict
 
+
 NANOLEAF_IP = "192.168.0.198"
 SUNRISE_OFFSET_M = 0  # offset from sunrise in minutes.
 SUNRISE_FADE_DURATION_S = 60*10
 # How long past the deadline before an unexecuted event expires in minutes.
 LAG_M = 10
-
+PLUGIN_UUIDS = {
+    "wheel": 	"6970681a-20b5-4c5e-8813-bdaebc4ee4fa",
+    "flow": 	"027842e4-e1d6-4a4c-a731-be74a1ebd4cf",
+    "explode": 	"713518c1-d560-47db-8991-de780af71d1e",
+    "fade": 	"b3fd723a-aae8-4c99-bf2b-087159e0ef53",
+    "random": 	"ba632d3e-9c2b-4413-a965-510c839b3f71",
+    "highlight": 	"70b7c636-6bf8-491f-89c1-f4103508d642",
+}
 nl = Nanoleaf(NANOLEAF_IP)
 ran_log = defaultdict(lambda: False)  # Register of events already ran.
-
-
-def display_sunrise():
-    """Reaches full brightness"""
-    nl.set_brightness(0, 0)
-    nl.set_effect("Coral Sunrise")
-    nl.set_brightness(0, 0)
-    nl.set_brightness(100, duration=SUNRISE_FADE_DURATION_S)
-
-
 Event = namedtuple("Event", ['t', 'name', 'fn'])
 
 
@@ -36,13 +34,39 @@ def date_tomorrow():
     return datetime.date.today() + datetime.timedelta(days=1)
 
 
-def mkev_sunrise(day: datetime.date):
-    """At sunrise turn on coral sunrise"""
-    sun = Sun(42.317794, -72.631973)
-    return Event(sun.get_sunrise_time(date=day)
+def plugin_lookup(name: str):
+    return PLUGIN_UUIDS[name.lower()]
+
+
+def get_sunrise_time(date: datetime.date):
+    return Sun(42.317794, -72.631973).get_sunrise_time(date)
+
+
+def display_sunrise_rising():
+    nl.set_brightness(0, 0)
+    nl.set_effect("Coral Sunrise")
+    nl.set_brightness(0, 0)
+    nl.set_brightness(100, duration=SUNRISE_FADE_DURATION_S)
+
+
+def display_sunrise_risen():
+    nl.set_effect("Wakeful Sunrise")
+    nl.set_brightness(100, 30)
+
+
+def mkev_sunrise_rising(day: datetime.date):
+    """Before sunrise fade in Coral Sunrise"""
+    return Event(get_sunrise_time(date=day)
                  + datetime.timedelta(minutes=SUNRISE_OFFSET_M)
                  + datetime.timedelta(seconds=-SUNRISE_FADE_DURATION_S),
-                 "morning-sunrise", display_sunrise)
+                 "morning-sunrise", display_sunrise_rising)
+
+
+def mkev_sunrise_risen(day: datetime.date):
+    """At sunrise proper switch to Wakeful Sunrise"""
+    return Event(get_sunrise_time(date=day)
+                 + datetime.timedelta(minutes=SUNRISE_OFFSET_M),
+                 "morning-sunrise", display_sunrise_risen)
 
 
 def mkev_morning_off(day: datetime.date):
@@ -80,27 +104,21 @@ def already_ran(ev, insert=False):
 def get_schedule():
     """Get a list of upcoming Events."""
     schedule = []
-    sun = Sun(42.317794, -72.631973)
-    # At sunrise turn on coral sunrise
-    schedule.append(mkev(mkev_sunrise))
+    for mk_fn in [
+        mkev_sunrise_rising,
+        mkev_sunrise_risen,
+        # At 10:15am turn off
+        mkev_morning_off,
+        # At 10pm turn on the nightlight
+        mkev_nightlight,
+    ]:
+        schedule.append(mkev(mk_fn))
 
-    # At 10:15am turn off
-    schedule.append(mkev(mkev_morning_off))
-
-    # At 10pm turn on the nightlight
-    schedule.append(mkev(mkev_nightlight))
-
-    # schedule.append(mkev(lambda day: Event(
-    #     datetime.datetime.combine(
-    #         day,
-    #         datetime.time(hour=21, minute=44)).astimezone(),
-    #     "probe-1", lambda: nl.set_color((3, 0, 0)))))
-
-    # schedule.append(mkev(lambda day: Event(
-    #     datetime.datetime.combine(
-    #         day,
-    #         datetime.time(hour=21, minute=45)).astimezone(),
-    #     "probe-2", lambda: nl.set_color((0, 0, 0)))))
+    schedule.append(mkev(lambda day: Event(
+        datetime.datetime.combine(
+            day,
+            datetime.time(hour=9, minute=18)).astimezone(),
+        "probe-1", display_sunrise_risen)))
 
     schedule = filter(lambda ev: not already_ran(ev), schedule)
     return sorted(schedule, key=lambda x: x[0])
@@ -206,10 +224,8 @@ if __name__ == "__main__":
  'animName': 'Coral Sunrise',
  'animType': 'plugin',
  'colorType': 'HSB',
- 'palette': [{'hue': 5,
-   'saturation': 61,
-   'brightness': 100,
-   'probability': 0.0},
+ 'palette': [
+  {'hue': 5, 'saturation': 61, 'brightness': 100, 'probability': 0.0},
   {'hue': 340, 'saturation': 31, 'brightness': 87, 'probability': 0.0},
   {'hue': 38, 'saturation': 76, 'brightness': 100, 'probability': 0.0}],
  'pluginType': 'color',
@@ -221,23 +237,23 @@ if __name__ == "__main__":
  'hasOverlay': False}
 """
 
-# Wakeful sunrise effect
+# Wakeful sunrise
 """
-{'version': '2.0',
- 'animName': 'Coral Sunrise',
- 'animType': 'plugin',
- 'colorType': 'HSB',
- 'palette': [{'hue': 5,
-   'saturation': 61,
-   'brightness': 100,
-   'probability': 0.0},
-  {'hue': 340, 'saturation': 31, 'brightness': 87, 'probability': 0.0},
-  {'hue': 38, 'saturation': 76, 'brightness': 100, 'probability': 0.0}],
- 'pluginType': 'color',
- 'pluginUuid': '6970681a-20b5-4c5e-8813-bdaebc4ee4fa',
- 'pluginOptions': [{'name': 'linDirection', 'value': 'right'},
-  {'name': 'loop', 'value': True},
-  {'name': 'nColorsPerFrame', 'value': 2},
-  {'name': 'transTime', 'value': 24}],
- 'hasOverlay': False}
+nl.write_effect({
+    "command": "add",
+    'animName': 'Wakeful Sunrise',
+    'animType': 'plugin',
+    'colorType': 'HSB',
+    'palette': [
+        {'hue': 201, 'saturation': 61, 'brightness': 100, 'probability': 0.0},
+        {'hue': 17, 'saturation': 8, 'brightness': 100, 'probability': 0.0},
+    ],
+    'pluginType': 'color',
+    'pluginUuid': plugin_lookup('random'),
+    'pluginOptions': [
+        {'name': 'transTime', 'value': 30},
+        {'name': 'delayTime', 'value': 10},
+    ],
+    'hasOverlay': False
+})
 """
